@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexAU 框架 - 底层架构详解</title>
+    <style>
+        :root {
+            --bg: #fafbfc;
+            --card: #ffffff;
+            --text: #24292e;
+            --text-light: #586069;
+            --border: #e1e4e8;
+            --blue: #0366d6;
+            --blue-light: #f1f8ff;
+            --green: #28a745;
+            --green-light: #f0fff4;
+            --purple: #6f42c1;
+            --purple-light: #f5f0ff;
+            --orange: #d73a49;
+            --orange-light: #ffeef0;
+            --yellow: #b08800;
+            --yellow-light: #fff5b1;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: var(--text-light);
+        }
+
+        .section {
+            background: var(--card);
+            border-radius: 8px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* 源码目录树 */
+        .source-tree {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.85rem;
+            background: #24292e;
+            color: #e1e4e8;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+
+        .source-tree .dir { color: #79b8ff; }
+        .source-tree .file { color: #85e89d; }
+        .source-tree .py { color: #ffab70; }
+        .source-tree .comment { color: #6a737d; font-style: italic; }
+        .source-tree .highlight { color: #f97583; font-weight: bold; }
+
+        .tree-line {
+            padding: 3px 0;
+            white-space: nowrap;
+        }
+
+        /* 核心类关系图 */
+        .class-diagram {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .class-box {
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .class-header {
+            padding: 12px 15px;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .class-header.blue { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+        .class-header.green { background: var(--green-light); color: var(--green); border-color: var(--green); }
+        .class-header.purple { background: var(--purple-light); color: var(--purple); border-color: var(--purple); }
+        .class-header.orange { background: var(--orange-light); color: var(--orange); border-color: var(--orange); }
+
+        .class-body {
+            padding: 15px;
+        }
+
+        .class-method {
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.85rem;
+        }
+
+        .class-method:last-child {
+            border-bottom: none;
+        }
+
+        .method-name {
+            font-family: 'SF Mono', Monaco, monospace;
+            color: var(--blue);
+            font-weight: 600;
+        }
+
+        .method-desc {
+            font-size: 0.75rem;
+            color: var(--text-light);
+            margin-top: 3px;
+        }
+
+        /* 执行流程图 */
+        .execution-flow {
+            position: relative;
+            padding: 20px 0;
+        }
+
+        .flow-stage {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .stage-box {
+            padding: 15px 20px;
+            background: var(--card);
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .stage-box.primary {
+            border-color: var(--blue);
+            background: var(--blue-light);
+        }
+
+        .stage-box.success {
+            border-color: var(--green);
+            background: var(--green-light);
+        }
+
+        .stage-box.purple {
+            border-color: var(--purple);
+            background: var(--purple-light);
+        }
+
+        .stage-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 5px;
+        }
+
+        .stage-file {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.75rem;
+            color: var(--text-light);
+        }
+
+        .flow-arrow {
+            font-size: 1.5rem;
+            color: var(--text-light);
+        }
+
+        /* 详细调用链 */
+        .detailed-chain {
+            background: #f6f8fa;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .chain-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .chain-step:last-child {
+            border-bottom: none;
+        }
+
+        .step-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .step-code {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            background: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            margin-top: 8px;
+            color: var(--text);
+        }
+
+        /* 模块依赖图 */
+        .module-deps {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .module-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .module-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .module-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .module-icon.blue { background: var(--blue-light); }
+        .module-icon.green { background: var(--green-light); }
+        .module-icon.purple { background: var(--purple-light); }
+
+        .module-title {
+            font-weight: 600;
+        }
+
+        .module-file {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .module-functions {
+            list-style: none;
+        }
+
+        .module-functions li {
+            padding: 6px 0;
+            font-size: 0.85rem;
+            color: var(--text-light);
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .module-functions li:last-child {
+            border-bottom: none;
+        }
+
+        .module-functions li code {
+            font-family: 'SF Mono', Monaco, monospace;
+            background: #f6f8fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.8rem;
+        }
+
+        /* 数据流图 */
+        .dataflow-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .dataflow-box {
+            background: #f6f8fa;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 20px;
+        }
+
+        .dataflow-box h4 {
+            font-weight: 600;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dataflow-steps {
+            list-style: none;
+            counter-reset: step-counter;
+        }
+
+        .dataflow-steps li {
+            counter-increment: step-counter;
+            padding: 10px 0 10px 35px;
+            position: relative;
+            border-bottom: 1px solid #e1e4e8;
+        }
+
+        .dataflow-steps li:last-child {
+            border-bottom: none;
+        }
+
+        .dataflow-steps li::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 10px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .dataflow-steps li strong {
+            display: block;
+            margin-bottom: 3px;
+        }
+
+        .dataflow-steps li span {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        /* 关键概念 */
+        .concept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .concept-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .concept-card-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .concept-card-desc {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            line-height: 1.6;
+        }
+
+        .concept-card-code {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 0.8rem;
+            background: #f6f8fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            border: 1px solid var(--border);
+        }
+
+        @media (max-width: 1000px) {
+            .class-diagram, .module-deps {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .dataflow-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 700px) {
+            .class-diagram, .module-deps {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 NexAU 框架 - 底层架构详解</h1>
+            <p>深入源码 · 理解核心机制 · 新手友好</p>
+        </div>
+
+        <!-- 一、源码目录结构 -->
+        <div class="section">
+            <h2 class="section-title">📂 一、NexAU 源码目录结构</h2>
+            <div class="source-tree">
+<div class="tree-line"><span class="dir">nexau/</span> <span class="comment"># 框架核心源码</span></div>
+<div class="tree-line">├── <span class="file">__init__.py</span> <span class="comment"># 导出核心类：Agent, Tool, LLMConfig, AgentConfig</span></div>
+<div class="tree-line">├── <span class="file">cli_wrapper.py</span> <span class="comment"># CLI 命令行入口</span></div>
+<div class="tree-line">│</div>
+<div class="tree-line">├── <span class="dir">archs/</span> <span class="comment"># 核心架构实现（最重要！）</span></div>
+<div class="tree-line">│   ├── <span class="dir">main_sub/</span> <span class="comment"># 主 - 子 Agent 架构</span></div>
+<div class="tree-line">│   │   ├── <span class="file highlight">agent.py</span> <span class="comment"># Agent 核心类（1304 行）</span></div>
+<div class="tree-line">│   │   ├── <span class="file">agent_state.py</span> <span class="comment"># Agent 状态管理</span></div>
+<div class="tree-line">│   │   ├── <span class="file">agent_context.py</span> <span class="comment"># Agent 上下文（GlobalStorage）</span></div>
+<div class="tree-line">│   │   ├── <span class="file">skill.py</span> <span class="comment"># Skill 支持</span></div>
+<div class="tree-line">│   │   ├── <span class="file">prompt_builder.py</span> <span class="comment"># 提示词构建</span></div>
+<div class="tree-line">│   │   │</div>
+<div class="tree-line">│   │   └── <span class="dir">execution/</span> <span class="comment"># 执行引擎</span></div>
+<div class="tree-line">│   │       ├── <span class="file highlight">executor.py</span> <span class="comment"># 核心执行器（1354 行）</span></div>
+<div class="tree-line">│   │       ├── <span class="file highlight">tool_executor.py</span> <span class="comment"># 工具执行器（384 行）</span></div>
+<div class="tree-line">│   │       ├── <span class="file highlight">llm_caller.py</span> <span class="comment"># LLM 调用封装</span></div>
+<div class="tree-line">│   │       ├── <span class="file">response_parser.py</span> <span class="comment"># 解析 LLM 响应</span></div>
+<div class="tree-line">│   │       ├── <span class="file">hooks.py</span> <span class="comment"># 中间件/钩子系统</span></div>
+<div class="tree-line">│   │       └── <span class="file">subagent_manager.py</span> <span class="comment"># 子 Agent 管理</span></div>
+<div class="tree-line">│   │</div>
+<div class="tree-line">├── <span class="dir">archs/tool/</span> <span class="comment"># 工具系统</span></div>
+<div class="tree-line">│   ├── <span class="file highlight">tool.py</span> <span class="comment"># Tool 类定义（342 行）</span></div>
+<div class="tree-line">│   └── <span class="dir">builtin/</span> <span class="comment"># 内置工具</span></div>
+<div class="tree-line">│</div>
+<div class="tree-line">├── <span class="dir">archs/llm/</span> <span class="comment"># LLM 层</span></div>
+<div class="tree-line">│   ├── <span class="file">llm_config.py</span> <span class="comment"># LLMConfig 配置类</span></div>
+<div class="tree-line">│   └── <span class="dir">llm_aggregators/</span> <span class="comment"># 多 LLM 聚合</span></div>
+<div class="tree-line">│</div>
+<div class="tree-line">├── <span class="dir">archs/session/</span> <span class="comment"># 会话管理</span></div>
+<div class="tree-line">├── <span class="dir">archs/tracer/</span> <span class="comment"># 追踪/可观测性</span></div>
+<div class="tree-line">├── <span class="dir">archs/transports/</span> <span class="comment"># 传输层（HTTP/SSE, stdio）</span></div>
+<div class="tree-line">├── <span class="dir">archs/sandbox/</span> <span class="comment"># 沙箱（代码执行隔离）</span></div>
+<div class="tree-line">│</div>
+<div class="tree-line">└── <span class="dir">core/</span> <span class="comment"># 核心协议</span></div>
+<div class="tree-line">    ├── <span class="file highlight">messages.py</span> <span class="comment"># 统一消息协议 UMP（416 行）</span></div>
+<div class="tree-line">    ├── <span class="file">adapters/</span> <span class="comment"># 适配器（兼容旧格式）</span></div>
+<div class="tree-line">    └── <span class="file">utils.py</span></div>
+            </div>
+        </div>
+
+        <!-- 二、核心类关系 -->
+        <div class="section">
+            <h2 class="section-title">🧩 二、核心类关系图</h2>
+            <div class="class-diagram">
+                <!-- Agent -->
+                <div class="class-box">
+                    <div class="class-header blue">
+                        🤖 Agent 类
+                    </div>
+                    <div class="class-body">
+                        <div class="class-method">
+                            <div class="method-name">__init__(config)</div>
+                            <div class="method-desc">初始化：加载配置、创建 Executor</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">run(message)</div>
+                            <div class="method-desc">单轮执行入口 → Executor.run()</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">chat(message)</div>
+                            <div class="method-desc">多轮对话入口</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_initialize_executor()</div>
+                            <div class="method-desc">从配置创建 Executor 实例</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Executor -->
+                <div class="class-box">
+                    <div class="class-header green">
+                        ⚙️ Executor 类
+                    </div>
+                    <div class="class-body">
+                        <div class="class-method">
+                            <div class="method-name">run()</div>
+                            <div class="method-desc">主执行循环（1354 行核心逻辑）</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_call_llm()</div>
+                            <div class="method-desc">调用 LLM API</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_parse_response()</div>
+                            <div class="method-desc">解析 LLM 返回的工具调用</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_execute_tools()</div>
+                            <div class="method-desc">并行/串行执行工具</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_check_stop()</div>
+                            <div class="method-desc">检查是否满足停止条件</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tool -->
+                <div class="class-box">
+                    <div class="class-header purple">
+                        🛠️ Tool 类
+                    </div>
+                    <div class="class-body">
+                        <div class="class-method">
+                            <div class="method-name">from_yaml(path, binding)</div>
+                            <div class="method-desc">从 YAML 加载工具定义 + 绑定函数</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">__init__(name, schema, impl)</div>
+                            <div class="method-desc">初始化：验证 schema、存储实现</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">execute(**kwargs)</div>
+                            <div class="method-desc">执行工具（带参数验证）</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">to_openai_tool()</div>
+                            <div class="method-desc">转换为 OpenAI 工具格式</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ToolExecutor -->
+                <div class="class-box">
+                    <div class="class-header orange">
+                        🔧 ToolExecutor 类
+                    </div>
+                    <div class="class-body">
+                        <div class="class-method">
+                            <div class="method-name">execute_tool(name, params)</div>
+                            <div class="method-desc">执行单个工具（带钩子）</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">execute_parallel()</div>
+                            <div class="method-desc">并行执行多个工具</div>
+                        </div>
+                        <div class="method-name">parse_xml()</div>
+                        <div class="method-desc">解析 XML 格式工具调用</div>
+                        </div>
+                        <div class="class-method">
+                            <div class="method-name">_run_with_middleware()</div>
+                            <div class="method-desc">中间件包装执行</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 三、完整执行流程 -->
+        <div class="section">
+            <h2 class="section-title">🔄 三、完整执行流程（从用户输入到返回）</h2>
+            <div class="execution-flow">
+                <!-- 阶段 1：初始化 -->
+                <div class="flow-stage">
+                    <div class="stage-box primary">
+                        <div class="stage-title">1. 初始化 Agent</div>
+                        <div class="stage-file">agent.py: __init__()</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box">
+                        <div class="stage-title">2. 加载配置</div>
+                        <div class="stage-file">AgentConfig</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box">
+                        <div class="stage-title">3. 创建 Executor</div>
+                        <div class="stage-file">executor.py</div>
+                    </div>
+                </div>
+
+                <!-- 阶段 2：执行 -->
+                <div class="flow-stage">
+                    <div class="stage-box purple">
+                        <div class="stage-title">4. 用户调用 run()</div>
+                        <div class="stage-file">agent.run(message)</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box green">
+                        <div class="stage-title">5. Executor.run()</div>
+                        <div class="stage-file">主循环开始</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box">
+                        <div class="stage-title">6. 构建提示词</div>
+                        <div class="stage-file">prompt_builder.py</div>
+                    </div>
+                </div>
+
+                <!-- 阶段 3：LLM 调用 -->
+                <div class="flow-stage">
+                    <div class="stage-box">
+                        <div class="stage-title">7. LLMCaller.call()</div>
+                        <div class="stage-file">llm_caller.py</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box primary">
+                        <div class="stage-title">8. 调用 OpenAI/Anthropic API</div>
+                        <div class="stage-file">openai.ChatCompletion.create()</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box">
+                        <div class="stage-title">9. 返回原始响应</div>
+                        <div class="stage-file">ModelResponse</div>
+                    </div>
+                </div>
+
+                <!-- 阶段 4：解析与执行 -->
+                <div class="flow-stage">
+                    <div class="stage-box">
+                        <div class="stage-title">10. ResponseParser</div>
+                        <div class="stage-file">解析工具调用意图</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box orange">
+                        <div class="stage-title">11. ToolExecutor</div>
+                        <div class="stage-file">执行工具</div>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="stage-box success">
+                        <div class="stage-title">12. 返回结果</div>
+                        <div class="stage-file">result → Agent → 用户</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 详细调用链 -->
+            <div class="detailed-chain">
+                <h3 style="margin-bottom: 20px;">📋 详细调用链（逐行源码追踪）</h3>
+                
+                <div class="chain-step">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <div class="step-title">用户调用</div>
+                        <div class="step-code">response = agent.run("明天下午 3 点开会")</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Agent.run() 方法</div>
+                        <div class="step-code">File: nexau/archs/main_sub/agent.py:687</div>
+                        <div class="step-code">def run(self, message: str, ...) → str:</div>
+                        <div class="step-code">    return self._run_single_turn(message=message, ...)</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <div class="step-title">单轮执行入口</div>
+                        <div class="step-code">File: agent.py:823</div>
+                        <div class="step-code">def _run_single_turn(self, ...):</div>
+                        <div class="step-code">    result = self.executor.run(</div>
+                        <div class="step-code">        user_message=message,</div>
+                        <div class="step-code">        history=self.history,</div>
+                        <div class="step-code">        ...</div>
+                        <div class="step-code">    )</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <div class="step-title">Executor 主循环</div>
+                        <div class="step-code">File: nexau/archs/main_sub/execution/executor.py:290</div>
+                        <div class="step-code">def run(self, user_message: str, history: HistoryList, ...):</div>
+                        <div class="step-code">    # 添加用户消息到历史</div>
+                        <div class="step-code">    history.add_user_message(user_message)</div>
+                        <div class="step-code">    </div>
+                        <div class="step-code">    for iteration in range(self.max_iterations):</div>
+                        <div class="step-code">        # 调用 LLM</div>
+                        <div class="step-code">        model_response = self._call_llm(history)</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <div class="step-title">LLMCaller 调用 API</div>
+                        <div class="step-code">File: executor.py:456 → llm_caller.py:78</div>
+                        <div class="step-code">def _call_llm(self, history: HistoryList):</div>
+                        <div class="step-code">    messages = history.to_openai_messages()</div>
+                        <div class="step-code">    tools = self._build_tools_param()  # 转换工具为 OpenAI 格式</div>
+                        <div class="step-code">    </div>
+                        <div class="step-code">    response = self.openai_client.chat.completions.create(</div>
+                        <div class="step-code">        model=self.llm_config.model,</div>
+                        <div class="step-code">        messages=messages,</div>
+                        <div class="step-code">        tools=tools,</div>
+                        <div class="step-code">    )</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">6</div>
+                    <div class="step-content">
+                        <div class="step-title">解析 LLM 响应</div>
+                        <div class="step-code">File: executor.py:520</div>
+                        <div class="step-code">parsed = self.response_parser.parse(model_response)</div>
+                        <div class="step-code"># parsed.tool_calls = [</div>
+                        <div class="step-code">#     ToolCall(name="add_event", args={title:"会议", start_time:"..."})</div>
+                        <div class="step-code"># ]</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">7</div>
+                    <div class="step-content">
+                        <div class="step-title">执行工具</div>
+                        <div class="step-code">File: executor.py:548</div>
+                        <div class="step-code">tool_results = self.tool_executor.execute_tool(</div>
+                        <div class="step-code">    agent_state=self.agent_state,</div>
+                        <div class="step-code">    tool_name="add_event",</div>
+                        <div class="step-code">    parameters={"title": "会议", "start_time": "..."},</div>
+                        <div class="step-code">)</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">8</div>
+                    <div class="step-content">
+                        <div class="step-title">ToolExecutor 查找并执行</div>
+                        <div class="step-code">File: tool_executor.py:89</div>
+                        <div class="step-code">def execute_tool(self, tool_name, parameters, ...):</div>
+                        <div class="step-code">    tool = self.tool_registry[tool_name]  # 查找工具</div>
+                        <div class="step-code">    </div>
+                        <div class="step-code">    # 执行前钩子</div>
+                        <div class="step-code">    self.middleware_manager.before_tool(...)</div>
+                        <div class="step-code">    </div>
+                        <div class="step-code">    # 调用绑定函数</div>
+                        <div class="step-code">    result = tool.implementation(**parameters)</div>
+                        <div class="step-code">    </div>
+                        <div class="step-code">    # 执行后钩子</div>
+                        <div class="step-code">    self.middleware_manager.after_tool(...)</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">9</div>
+                    <div class="step-content">
+                        <div class="step-title">执行用户代码</div>
+                        <div class="step-code">File: src/event_manager.py:45</div>
+                        <div class="step-code">def add_event_binding(title, start_time, end_time, ...):</div>
+                        <div class="step-code">    return event_manager.add_event(title, start_time, end_time, ...)</div>
+                        <div class="step-code"></div>
+                        <div class="step-code">File: event_manager.py:32</div>
+                        <div class="step-code">def add_event(self, ...):</div>
+                        <div class="step-code">    event_id = str(uuid.uuid4())[:8]</div>
+                        <div class="step-code">    event = Event(event_id, title, start_time, ...)</div>
+                        <div class="step-code">    self.events[event_id] = asdict(event)</div>
+                        <div class="step-code">    self._save_events()  # 写入 JSON 文件</div>
+                    </div>
+                </div>
+
+                <div class="chain-step">
+                    <div class="step-num">10</div>
+                    <div class="step-content">
+                        <div class="step-title">结果返回给用户</div>
+                        <div class="step-code">File: executor.py:600</div>
+                        <div class="step-code">return self._format_final_response(tool_results)</div>
+                        <div class="step-code"></div>
+                        <div class="step-code">File: agent.py:850</div>
+                        <div class="step-code">return result  # "已创建日程：会议"</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 四、核心模块详解 -->
+        <div class="section">
+            <h2 class="section-title">🔍 四、核心模块详解</h2>
+            <div class="module-deps">
+                <!-- Executor 模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon blue">⚙️</div>
+                        <div>
+                            <div class="module-title">Executor 执行器</div>
+                            <div class="module-file">executor.py (1354 行)</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>run()</code> - 主执行循环</li>
+                        <li><code>_call_llm()</code> - 调用 LLM API</li>
+                        <li><code>_parse_response()</code> - 解析工具调用</li>
+                        <li><code>_execute_tools()</code> - 执行工具（支持并行）</li>
+                        <li><code>_batch_process()</code> - 批量处理</li>
+                        <li><code>_check_context_limit()</code> - 上下文限制检查</li>
+                    </ul>
+                </div>
+
+                <!-- ToolExecutor 模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon green">🛠️</div>
+                        <div>
+                            <div class="module-title">ToolExecutor 工具执行器</div>
+                            <div class="module-file">tool_executor.py (384 行)</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>execute_tool()</code> - 执行单个工具</li>
+                        <li><code>execute_parallel()</code> - 并行执行多个工具</li>
+                        <li><code>parse_xml()</code> - XML 格式解析</li>
+                        <li><code>_validate_params()</code> - 参数验证</li>
+                        <li><code>_run_with_middleware()</code> - 中间件包装</li>
+                    </ul>
+                </div>
+
+                <!-- LLMCaller 模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon purple">🧠</div>
+                        <div>
+                            <div class="module-title">LLMCaller LLM 调用器</div>
+                            <div class="module-file">llm_caller.py</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>call()</code> - 调用 LLM API</li>
+                        <li><code>_build_messages()</code> - 构建消息列表</li>
+                        <li><code>_build_tools()</code> - 构建工具参数</li>
+                        <li><code>_handle_stream()</code> - 流式响应处理</li>
+                        <li><code>_retry()</code> - 重试逻辑</li>
+                    </ul>
+                </div>
+
+                <!-- ResponseParser 模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon blue">📋</div>
+                        <div>
+                            <div class="module-title">ResponseParser 响应解析器</div>
+                            <div class="module-file">response_parser.py</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>parse()</code> - 解析 LLM 响应</li>
+                        <li><code>_parse_tool_calls()</code> - 提取工具调用</li>
+                        <li><code>_parse_text()</code> - 提取文本回复</li>
+                        <li><code>_validate_structure()</code> - 验证结构</li>
+                    </ul>
+                </div>
+
+                <!-- Hooks 中间件模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon green">🔌</div>
+                        <div>
+                            <div class="module-title">Hooks 中间件系统</div>
+                            <div class="module-file">hooks.py</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>BeforeModelHook</code> - LLM 调用前</li>
+                        <li><code>AfterModelHook</code> - LLM 调用后</li>
+                        <li><code>BeforeToolHook</code> - 工具执行前</li>
+                        <li><code>AfterToolHook</code> - 工具执行后</li>
+                        <li><code>FunctionMiddleware</code> - 函数包装器</li>
+                    </ul>
+                </div>
+
+                <!-- Tool 类模块 -->
+                <div class="module-card">
+                    <div class="module-card-header">
+                        <div class="module-icon purple">🔧</div>
+                        <div>
+                            <div class="module-title">Tool 工具类</div>
+                            <div class="module-file">tool.py (342 行)</div>
+                        </div>
+                    </div>
+                    <ul class="module-functions">
+                        <li><code>from_yaml()</code> - 从 YAML 加载</li>
+                        <li><code>execute()</code> - 执行工具</li>
+                        <li><code>_validate_schema()</code> - JSONSchema 验证</li>
+                        <li><code>to_openai_tool()</code> - 转 OpenAI 格式</li>
+                        <li><code>_lazy_load_impl()</code> - 延迟加载实现</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 五、数据流详解 -->
+        <div class="section">
+            <h2 class="section-title">💧 五、数据流详解</h2>
+            <div class="dataflow-grid">
+                <!-- 消息流转 -->
+                <div class="dataflow-box">
+                    <h4>📨 消息流转过程</h4>
+                    <ul class="dataflow-steps">
+                        <li>
+                            <strong>用户输入字符串</strong>
+                            <span>"明天下午 3 点开会"</span>
+                        </li>
+                        <li>
+                            <strong>转换为 Message 对象</strong>
+                            <span>Message(role=USER, content=[TextBlock(text="...")])</span>
+                        </li>
+                        <li>
+                            <strong>添加到 HistoryList</strong>
+                            <span>history.add_message()</span>
+                        </li>
+                        <li>
+                            <strong>转换为 OpenAI 格式</strong>
+                            <span>[{"role": "user", "content": "..."}]</span>
+                        </li>
+                        <li>
+                            <strong>发送给 LLM API</strong>
+                            <span>openai.ChatCompletion.create()</span>
+                        </li>
+                        <li>
+                            <strong>接收 LLM 响应</strong>
+                            <span>ChatCompletionMessage(tool_calls=[...])</span>
+                        </li>
+                        <li>
+                            <strong>解析为 ToolCall 对象</strong>
+                            <span>ToolCall(name="add_event", args={...})</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 工具执行流程 -->
+                <div class="dataflow-box">
+                    <h4>🔧 工具执行流程</h4>
+                    <ul class="dataflow-steps">
+                        <li>
+                            <strong>解析 ToolCall</strong>
+                            <span>提取 tool_name 和 parameters</span>
+                        </li>
+                        <li>
+                            <strong>查找工具</strong>
+                            <span>tool = tool_registry[tool_name]</span>
+                        </li>
+                        <li>
+                            <strong>执行 BeforeTool 钩子</strong>
+                            <span>middleware.before_tool()</span>
+                        </li>
+                        <li>
+                            <strong>参数验证</strong>
+                            <span>jsonschema.validate(params, tool.input_schema)</span>
+                        </li>
+                        <li>
+                            <strong>调用绑定函数</strong>
+                            <span>tool.implementation(**parameters)</span>
+                        </li>
+                        <li>
+                            <strong>执行 AfterTool 钩子</strong>
+                            <span>middleware.after_tool()</span>
+                        </li>
+                        <li>
+                            <strong>返回结果</strong>
+                            <span>{"status": "success", "event_id": "..."}</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 六、关键概念解释 -->
+        <div class="section">
+            <h2 class="section-title">📚 六、关键概念解释</h2>
+            <div class="concept-grid">
+                <div class="concept-card">
+                    <div class="concept-card-title">🎯 Executor（执行器）</div>
+                    <div class="concept-card-desc">
+                        Executor 是框架的"引擎"，负责整个执行循环：调用 LLM → 解析响应 → 执行工具 → 检查结果 → 重复直到完成。它是 Agent 类的"大脑"，处理所有核心逻辑。
+                    </div>
+                    <div class="concept-card-code">
+# agent.py 中创建 Executor
+self.executor = Executor(
+    agent_name=self.config.name,
+    tool_registry=self.tools,
+    llm_config=self.config.llm_config,
+    ...
+)
+                    </div>
+                </div>
+
+                <div class="concept-card">
+                    <div class="concept-card-title">🔌 Middleware（中间件）</div>
+                    <div class="concept-card-desc">
+                        中间件是在 LLM 调用前后、工具执行前后插入的"钩子"。可以用来做日志、缓存、修改请求/响应等。类似 Web 框架的 Middleware。
+                    </div>
+                    <div class="concept-card-code">
+# hooks.py 定义钩子
+class BeforeModelHook:
+    async def __call__(self, input: BeforeModelHookInput):
+        # 可以修改 messages、tools 等
+        return input
+                    </div>
+                </div>
+
+                <div class="concept-card">
+                    <div class="concept-card-title">📦 Tool Registry（工具注册表）</div>
+                    <div class="concept-card-desc">
+                        工具注册表是一个字典，key 是工具名，value 是 Tool 对象。Executor 通过它查找要执行的工具。类似"电话簿"。
+                    </div>
+                    <div class="concept-card-code">
+# executor.py 初始化
+self.tool_registry = {
+    "add_event": Tool(...),
+    "query_event": Tool(...),
+    ...
+}
+                    </div>
+                </div>
+
+                <div class="concept-card">
+                    <div class="concept-card-title">📝 HistoryList（历史列表）</div>
+                    <div class="concept-card-desc">
+                        HistoryList 保存所有对话历史（用户消息、AI 回复、工具调用结果）。每次调用 LLM 时都会带上历史，让 AI 有"记忆"。
+                    </div>
+                    <div class="concept-card-code">
+# history_list.py
+class HistoryList:
+    def add_user_message(self, text: str):
+        self.messages.append(Message(role=USER, content=text))
+    
+    def to_openai_messages(self) -> list[dict]:
+        # 转换为 OpenAI API 格式
+        ...
+                    </div>
+                </div>
+
+                <div class="concept-card">
+                    <div class="concept-card-title">🔀 Tool Call Mode（工具调用模式）</div>
+                    <div class="concept-card-desc">
+                        NexAU 支持多种工具调用格式：OpenAI 的 function calling、Anthropic 的 XML 格式、自定义 XML 格式。tool_call_mode 参数决定用哪种。
+                    </div>
+                    <div class="concept-card-code">
+# config.yaml
+tool_call_mode: "openai"  # 或 "xml"、"anthropic"
+
+# executor.py 中转换
+if self.tool_call_mode == "openai":
+    tools = [t.to_openai_tool() for t in self.tools]
+                    </div>
+                </div>
+
+                <div class="concept-card">
+                    <div class="concept-card-title">🎛️ GlobalStorage（全局存储）</div>
+                    <div class="concept-card-desc">
+                        GlobalStorage 是在整个 Agent 执行过程中共享的数据存储。工具可以读取/修改它，实现跨工具的状态共享。
+                    </div>
+                    <div class="concept-card-code">
+# agent_context.py
+class GlobalStorage:
+    def __init__(self):
+        self._data = {}
+    
+    def get(self, key: str) -> Any:
+        return self._data.get(key)
+    
+    def set(self, key: str, value: Any):
+        self._data[key] = value
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 七、总结 -->
+        <div class="section" style="background: linear-gradient(135deg, #f0f7ff, #f0fff4);">
+            <h2 class="section-title">💡 总结：NexAU 框架核心思想</h2>
+            <div style="text-align: center; padding: 20px;">
+                <p style="margin-bottom: 20px; font-size: 1.1rem;">
+                    <strong>Agent</strong> 是"外壳" → <strong>Executor</strong> 是"引擎" → <strong>ToolExecutor</strong> 是"执行器"
+                </p>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-top: 30px;">
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 2rem; margin-bottom: 10px;">🎯</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">职责分离</div>
+                        <div style="font-size: 0.9rem; color: var(--text-light);">
+                            Agent 负责配置，Executor 负责执行，Tool 负责具体功能
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 2rem; margin-bottom: 10px;">🔌</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">可扩展性</div>
+                        <div style="font-size: 0.9rem; color: var(--text-light);">
+                            通过中间件、钩子、自定义工具轻松扩展功能
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 2rem; margin-bottom: 10px;">📦</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">模块化设计</div>
+                        <div style="font-size: 0.9rem; color: var(--text-light);">
+                            每个组件独立，可以单独替换/升级
+                        </div>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border);">
+                        <div style="font-size: 2rem; margin-bottom: 10px;">🔄</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">循环执行</div>
+                        <div style="font-size: 0.9rem; color: var(--text-light);">
+                            LLM → 解析 → 执行 → 检查 → 重复，直到完成任务
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
