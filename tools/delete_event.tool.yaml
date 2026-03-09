@@ -1,0 +1,11 @@
+type: tool
+name: delete_event
+description: 删除日程
+input_schema:
+  type: object
+  properties:
+    event_id:
+      type: string
+      description: 要删除的日程 ID
+  required:
+    - event_id

@@ -1,0 +1,18 @@
+type: tool
+name: query_event
+description: 查询日程。可以按日期范围、关键词等条件搜索。
+input_schema:
+  type: object
+  properties:
+    start_date:
+      type: string
+      description: 查询开始日期 YYYY-MM-DD
+    end_date:
+      type: string
+      description: 查询结束日期 YYYY-MM-DD
+    keyword:
+      type: string
+      description: 搜索关键词（可选）
+  required:
+    - start_date
+    - end_date

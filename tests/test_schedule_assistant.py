@@ -1,0 +1,182 @@
+"""
+个人日程助手测试模块
+"""
+import pytest
+import sys
+from pathlib import Path
+
+# 添加项目根目录到路径
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.event_manager import (
+    EventManager,
+    add_event_binding,
+    modify_event_binding,
+    query_event_binding,
+    delete_event_binding,
+)
+
+
+class TestEventManager:
+    """测试日程管理核心功能"""
+
+    def setup_method(self):
+        """每个测试前初始化"""
+        self.manager = EventManager(data_file="data/test_events.json")
+        # 清空测试数据
+        self.manager.events = {}
+        self.manager._save_events()
+
+    def teardown_method(self):
+        """每个测试后清理"""
+        test_file = Path("data/test_events.json")
+        if test_file.exists():
+            test_file.unlink()
+
+    def test_add_event(self):
+        """测试添加日程"""
+        result = add_event_binding(
+            title="团队周会",
+            start_time="2026-03-10 15:00",
+            end_time="2026-03-10 16:00",
+            description="讨论 Q2 计划",
+            location="会议室 A"
+        )
+        assert result["status"] == "success"
+        assert "event_id" in result
+        assert "已创建日程" in result["message"]
+
+    def test_query_events(self):
+        """测试查询日程"""
+        # 先添加一些测试数据
+        add_event_binding("测试会议 1", "2026-03-15 10:00", "2026-03-15 11:00")
+        add_event_binding("测试会议 2", "2026-03-20 14:00", "2026-03-20 15:00")
+
+        result = query_event_binding(
+            start_date="2026-03-01",
+            end_date="2026-03-31"
+        )
+        assert result["status"] == "success"
+        assert "events" in result
+        assert result["count"] == 2
+
+    def test_query_events_with_keyword(self):
+        """测试带关键词查询"""
+        add_event_binding("团队会议", "2026-03-15 10:00", "2026-03-15 11:00", description="重要讨论")
+        add_event_binding("个人日程", "2026-03-20 14:00", "2026-03-20 15:00")
+
+        result = query_event_binding(
+            start_date="2026-03-01",
+            end_date="2026-03-31",
+            keyword="团队"
+        )
+        assert result["status"] == "success"
+        assert result["count"] == 1
+        assert result["events"][0]["title"] == "团队会议"
+
+    def test_modify_event(self):
+        """测试修改日程"""
+        # 先添加
+        add_result = add_event_binding("测试会议", "2026-03-15 10:00", "2026-03-15 11:00")
+        event_id = add_result["event_id"]
+
+        # 再修改
+        modify_result = modify_event_binding(
+            event_id=event_id,
+            title="修改后的会议"
+        )
+        assert modify_result["status"] == "success"
+
+        # 验证修改
+        query_result = query_event_binding("2026-03-01", "2026-03-31")
+        event = next(e for e in query_result["events"] if e["event_id"] == event_id)
+        assert event["title"] == "修改后的会议"
+
+    def test_delete_event(self):
+        """测试删除日程"""
+        add_result = add_event_binding("临时会议", "2026-03-20 14:00", "2026-03-20 15:00")
+        event_id = add_result["event_id"]
+
+        delete_result = delete_event_binding(event_id=event_id)
+        assert delete_result["status"] == "success"
+
+        # 验证已删除
+        query_result = query_event_binding("2026-03-01", "2026-03-31")
+        assert query_result["count"] == 0
+
+    def test_delete_nonexistent_event(self):
+        """测试删除不存在的日程"""
+        result = delete_event_binding(event_id="nonexistent")
+        assert result["status"] == "error"
+        assert "未找到" in result["message"]
+
+    def test_modify_nonexistent_event(self):
+        """测试修改不存在的日程"""
+        result = modify_event_binding(event_id="nonexistent", title="新标题")
+        assert result["status"] == "error"
+        assert "未找到" in result["message"]
+
+
+class TestScheduleParser:
+    """测试日程解析器"""
+
+    def setup_method(self):
+        from src.doc_parser import ScheduleParser
+        self.parser = ScheduleParser()
+
+    def test_extract_title(self):
+        """测试标题提取"""
+        title = self.parser._extract_title("明天下午 3 点团队会议")
+        assert title == "团队会议"
+
+    def test_extract_time_with_date(self):
+        """测试时间提取 - 日期格式"""
+        text = "2026-03-10 15:00~16:00 团队会议"
+        time_info = self.parser._extract_time(text)
+        assert time_info["raw"] != ""
+
+    def test_extract_time_with_relative(self):
+        """测试时间提取 - 相对时间"""
+        text = "明天下午 3 点开会"
+        time_info = self.parser._extract_time(text)
+        assert time_info["raw"] != ""
+
+    def test_normalize_time_relative(self):
+        """测试时间标准化 - 相对时间"""
+        normalized = self.parser.normalize_time("明天 15:00")
+        assert len(normalized) == 16  # YYYY-MM-DD HH:MM
+
+    def test_normalize_time_standard(self):
+        """测试时间标准化 - 标准格式"""
+        normalized = self.parser.normalize_time("2026-03-10 15:00")
+        assert normalized == "2026-03-10 15:00"
+
+    def test_parse_chat_log(self):
+        """测试聊天记录解析"""
+        chat_text = """
+        张三：我们明天下午 3 点开会讨论项目
+        李四：好的，会议地点在哪里？
+        张三：在会议室 A，大概一个小时
+        """
+        schedules = self.parser.parse_chat_log(chat_text)
+        assert isinstance(schedules, list)
+
+    def test_parse_markdown_file(self, tmp_path):
+        """测试 Markdown 文件解析"""
+        md_content = """
+        # 项目计划
+
+        ## 日程安排
+        - 2026-03-10 15:00~16:00 团队会议
+        - 2026-03-15 10:00~11:00 项目评审
+        """
+        md_file = tmp_path / "test.md"
+        md_file.write_text(md_content, encoding='utf-8')
+
+        schedules = self.parser.parse_markdown_file(str(md_file))
+        assert isinstance(schedules, list)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

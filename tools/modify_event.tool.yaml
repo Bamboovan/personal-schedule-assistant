@@ -1,0 +1,26 @@
+type: tool
+name: modify_event
+description: 修改现有日程。可以更改时间、标题、描述等信息。
+input_schema:
+  type: object
+  properties:
+    event_id:
+      type: string
+      description: 日程 ID
+    title:
+      type: string
+      description: 新标题（可选，不修改则留空）
+    start_time:
+      type: string
+      description: 新开始时间（可选）
+    end_time:
+      type: string
+      description: 新结束时间（可选）
+    description:
+      type: string
+      description: 新描述（可选）
+    location:
+      type: string
+      description: 新地点（可选）
+  required:
+    - event_id
