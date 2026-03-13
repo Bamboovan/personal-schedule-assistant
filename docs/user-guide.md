@@ -8,12 +8,23 @@
 
 ### 1. 环境准备
 
+使用 uv（推荐）：
 ```bash
-# 安装依赖
-pip install python-dotenv
+# 创建虚拟环境
+uv venv
 
-# 或使用 uv
-uv pip install python-dotenv
+# 激活虚拟环境
+source .venv/bin/activate
+
+# 安装依赖
+uv pip install -r requirements.txt
+```
+
+或使用 pip：
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
 ### 2. 配置环境变量
@@ -36,6 +47,7 @@ LLM_API_KEY="your-dashscope-api-key"
 ### 3. 启动智能体
 
 ```bash
+source .venv/bin/activate
 python main.py
 ```
 
@@ -72,6 +84,15 @@ python main.py
 🤖 助手：已删除日程：团队会议
 ```
 
+### 解析文档
+
+```
+👤 你：帮我解析这个日程安排：
+- 3月15日上午10点项目评审
+- 3月20日下午2点客户会议
+🤖 助手：已从文档中提取 2 条日程信息...
+```
+
 ## 🛠️ 工具说明
 
 | 工具 | 功能 | 参数 |
@@ -80,6 +101,7 @@ python main.py
 | modify_event | 修改日程 | event_id, title, start_time, end_time, description, location |
 | query_event | 查询日程 | start_date, end_date, keyword |
 | delete_event | 删除日程 | event_id |
+| parse_document | 解析文档 | content, source_type |
 
 ## 📁 数据存储
 
@@ -105,7 +127,8 @@ python main.py
 运行测试套件：
 
 ```bash
-pytest tests/test_schedule_assistant.py -v
+source .venv/bin/activate
+pytest tests/ -v
 ```
 
 ## 📝 时间格式支持
@@ -113,8 +136,35 @@ pytest tests/test_schedule_assistant.py -v
 支持多种时间表达方式：
 
 - 标准格式：`2026-03-10 15:00`
-- 相对时间：`明天下午 3 点`、`下周一`
+- 相对时间：`明天 15:00`、`下周一`
 - 日期范围：`2026-03-10 15:00~16:00`
+
+## ✨ 功能特性
+
+### 冲突检测
+
+创建或修改日程时，系统会自动检测时间冲突：
+
+```python
+from src.event_manager import EventManager
+
+manager = EventManager()
+conflicts = manager.check_conflict("2026-03-15 10:00", "2026-03-15 11:00")
+```
+
+### 文档解析
+
+从 Markdown 文件或文本中提取日程：
+
+```python
+from src.event_manager import parse_document_binding
+
+# 解析文本
+result = parse_document_binding("明天下午3点开会讨论项目", "text")
+
+# 解析文件
+result = parse_document_binding("notes.md", "file")
+```
 
 ## 🔧 扩展功能
 
@@ -133,6 +183,16 @@ parser = ScheduleParser()
 schedules = parser.parse_markdown_file("notes.md")
 ```
 
+### 启用可观测性
+
+在 `.env` 中配置 Langfuse：
+
+```bash
+LANGFUSE_SECRET_KEY="sk-lf-xxx"
+LANGFUSE_PUBLIC_KEY="pk-lf-xxx"
+LANGFUSE_HOST="https://cloud.langfuse.com"
+```
+
 ## ❓ 常见问题
 
 **Q: 如何切换 LLM 模型？**
@@ -143,6 +203,9 @@ A: 默认保存在本地 `data/events.json`，可自行实现云端同步。
 
 **Q: 如何设置提醒？**
 A: 创建日程时通过 `reminder` 参数设置提前提醒时间（分钟）。
+
+**Q: 如何检测日程冲突？**
+A: 使用 `check_conflict()` 方法或通过智能体询问。
 
 ## 📄 许可证
 
