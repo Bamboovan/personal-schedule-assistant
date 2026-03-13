@@ -22,9 +22,10 @@ personal-assistant/
 │   └── doc_parser.py       # 文档解析
 ├── skills/                 # 技能定义
 │   └── schedule-skill/
-│       ├── skill.md
-│       ├── examples.md
-│       └── prompts/extract_schedule.md
+│       ├── SKILL.md        # 技能定义文件（必需，YAML frontmatter 格式）
+│       ├── examples.md     # 使用示例（可选）
+│       └── prompts/        # 提示词模板（可选）
+│           └── extract_schedule.md
 ├── data/                   # 数据存储
 │   └── events.json         # 日程数据
 ├── tests/                  # 测试文件
@@ -120,6 +121,121 @@ pytest tests/ -v
 
 查看 [docs/user-guide.md](docs/user-guide.md) 获取完整使用指南。
 
+## 🧠 Skill（技能）系统
+
+### 什么是 Skill？
+
+Skill 是 NexAU 框架中用于增强 AI 专业能力的机制。它通过提供结构化的知识文档，帮助 AI 更好地理解：
+- 何时调用特定工具
+- 如何理解用户意图
+- 领域的专业知识和注意事项
+
+### Skill 与 Tool 的区别
+
+| 维度 | Skill（技能） | Tool（工具） |
+|------|---------------|--------------|
+| **作用** | 给 AI "知识"和"指导" | 给 AI "执行能力" |
+| **形式** | Markdown 文档 | YAML 定义 + Python 函数 |
+| **是否执行代码** | ❌ 不执行，只是文本 | ✅ 执行实际逻辑 |
+| **类比** | 员工的"培训手册" | 员工的"工具包" |
+
+### Skill 文件结构
+
+```
+skills/your-skill/
+├── SKILL.md              # 必需：技能定义（带 YAML frontmatter）
+├── examples.md           # 可选：使用示例
+└── prompts/              # 可选：专用提示词模板
+    └── custom_prompt.md
+```
+
+### SKILL.md 格式要求
+
+**重要：** 文件名必须是 `SKILL.md`（大写），且必须包含 YAML frontmatter：
+
+```markdown
+---
+name: skill-identifier
+description: 技能的简短描述
+---
+
+# 技能名称
+
+## 概述
+技能的详细说明...
+
+## 能力
+- 能力 1
+- 能力 2
+
+## 工具列表
+| 工具名 | 功能 |
+|--------|------|
+| tool_name | 描述 |
+
+## 注意事项
+- 注意点 1
+- 注意点 2
+```
+
+### 注册 Skill
+
+在 `config.yaml` 中添加：
+
+```yaml
+skills:
+  - path: skills/your-skill
+```
+
+在 `main.py` 中加载：
+
+```python
+from nexau.archs.main_sub.skill import Skill
+
+skill = Skill.from_folder(Path('skills/your-skill'))
+agent_config = AgentConfig(
+    # ... 其他配置 ...
+    skills=[skill],
+)
+```
+
+### 最佳实践
+
+1. **保持简洁** - 一个 skill.md 文件就足够，不需要额外文件
+2. **描述清晰** - 明确说明技能的用途、工具列表和注意事项
+3. **命名规范** - 使用小写连字符命名（如 `schedule-management`）
+4. **工具协同** - Skill 中提到的工具需要在 `tools/` 目录有对应定义
+
+### 示例：日程管理 Skill
+
+```markdown
+---
+name: schedule-management
+description: 日程管理技能，帮助智能体从自然语言中提取时间信息并管理日程
+---
+
+# 日程管理技能
+
+## 能力
+- **创建日程**：从自然语言中提取时间、地点、描述等信息
+- **查询日程**：按日期范围、关键词查询
+- **修改日程**：修改已有日程的时间、标题等
+- **删除日程**：删除指定日程
+
+## 工具列表
+| 工具名 | 功能 |
+|--------|------|
+| add_event | 添加日程 |
+| query_event | 查询日程 |
+| modify_event | 修改日程 |
+| delete_event | 删除日程 |
+
+## 注意事项
+- 时间格式统一为 `YYYY-MM-DD HH:MM`
+- 创建日程时检查时间冲突
+- 删除操作前需要用户确认
+```
+
 ## 🧪 测试状态
 
 - ✅ 添加日程测试通过
@@ -138,6 +254,7 @@ pytest tests/ -v
 - 修复 `doc_parser.py` 正则表达式 `|` 符号空格问题
 - 统一 `config.yaml` 与 `main.py` 配置（`system_prompt_type: jinja`）
 - 修复测试隔离问题，使用独立实例而非全局变量
+- 修复 skill 系统的相关问题，补全有关 skill 使用的相关文档
 
 #### P1 代码质量
 - 添加完整类型注解（`TypedDict`、函数签名）
