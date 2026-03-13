@@ -36,8 +36,21 @@ class ScheduleInfo(TypedDict):
 class ScheduleParser:
     """从聊天记录和 Markdown 文档中提取日程信息。"""
 
+    # 中文时间段映射
+    CHINESE_TIME_PERIODS: dict[str, tuple[int, int]] = {
+        '凌晨': (0, 6),    # 0-6点
+        '上午': (6, 12),   # 6-12点
+        '中午': (11, 14),  # 11-14点
+        '下午': (12, 18),  # 12-18点
+        '晚上': (18, 24),  # 18-24点
+    }
+
     # 时间模式匹配
     TIME_PATTERNS: list[str] = [
+        # 中文时间范围：下午3点到5点
+        r'(凌晨|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点\s*(\d{1,2})?\s*(分|半)?\s*[到至~]\s*(\d{1,2})\s*点\s*(\d{1,2})?\s*(分|半)?',
+        # 中文时间点：下午3点、下午3点半、下午3点15
+        r'(凌晨|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点\s*(\d{1,2})?\s*(分|半)?',
         # 完整日期范围：2026-03-10 15:00~16:00
         r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*(\d{1,2}:\d{2})?\s*[-~至到]\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*(\d{1,2}:\d{2})?',
         # 完整日期 + 时间：2026-03-10 15:00
@@ -137,6 +150,10 @@ class ScheduleParser:
         for pattern in self.TIME_PATTERNS:
             text = re.sub(pattern, '', text)
 
+        # 移除相对日期词
+        relative_date_pattern = r'(今天|明天|后天|下周一|下周二|下周三|下周四|下周五|下周六|下周日)\s*'
+        text = re.sub(relative_date_pattern, '', text)
+
         # 清理文本
         text = re.sub(r'[：:]\s*$', '', text)
         text = re.sub(r'^[\s\-•*]+', '', text)
@@ -160,6 +177,46 @@ class ScheduleParser:
                     'groups': match.groups()
                 }
         return {'raw': '', 'groups': ()}
+
+    def _parse_chinese_time(self, time_str: str) -> tuple[int, int] | None:
+        """解析中文时间格式，返回 (小时, 分钟) 或 None。
+
+        Args:
+            time_str: 包含中文时间的字符串
+
+        Returns:
+            (小时, 分钟) 元组，或 None
+        """
+        # 匹配：时间段 + 数字 + 点 + 可选分/半（支持空格）
+        match = re.search(
+            r'(凌晨|上午|中午|下午|晚上)?\s*(\d{1,2})\s*点\s*(\d{1,2})?\s*(分|半)?',
+            time_str
+        )
+        if not match:
+            return None
+
+        period, hour_str, minute_str, minute_unit = match.groups()
+        hour = int(hour_str)
+
+        # 处理分钟
+        if minute_unit == '半':
+            minute = 30
+        elif minute_str:
+            minute = int(minute_str)
+        else:
+            minute = 0
+
+        # 根据时间段调整小时
+        if period:
+            if period == '下午' and hour < 12:
+                hour += 12
+            elif period == '晚上' and hour < 12:
+                hour += 12
+            elif period == '凌晨' and hour == 12:
+                hour = 0
+            # 上午、中午保持原样
+
+        return (hour, minute)
 
     def normalize_time(self, time_str: str) -> str:
         """将各种时间格式标准化为 YYYY-MM-DD HH:MM。
@@ -189,12 +246,23 @@ class ScheduleParser:
         for rel_str, days in relative_days.items():
             if rel_str in time_str:
                 target_date = today + timedelta(days=days)
-                # 提取时间
+                # 先尝试中文时间格式
+                chinese_time = self._parse_chinese_time(time_str)
+                if chinese_time:
+                    hour, minute = chinese_time
+                    return f"{target_date.strftime('%Y-%m-%d')} {hour:02d}:{minute:02d}"
+                # 再尝试 HH:MM 格式
                 time_match = re.search(r'(\d{1,2}:\d{2})', time_str)
                 if time_match:
                     return f"{target_date.strftime('%Y-%m-%d')} {time_match.group(1)}"
                 else:
                     return f"{target_date.strftime('%Y-%m-%d')} 09:00"
+
+        # 尝试中文时间格式（无相对日期）
+        chinese_time = self._parse_chinese_time(time_str)
+        if chinese_time:
+            hour, minute = chinese_time
+            return f"{hour:02d}:{minute:02d}"
 
         # 处理标准日期格式
         date_match = re.search(r'(\d{4})[-/](\d{1,2})[-/](\d{1,2})', time_str)

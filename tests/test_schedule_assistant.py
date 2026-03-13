@@ -132,9 +132,29 @@ class TestScheduleParser:
 
     def test_extract_time_with_relative(self):
         """测试时间提取 - 相对时间"""
-        text = "明天下午 3 点开会"
+        # 支持 HH:MM 格式
+        text = "明天 15:00 开会"
         time_info = self.parser._extract_time(text)
         assert time_info["raw"] != ""
+
+        # 支持中文时间格式
+        text = "明天下午3点开会"
+        time_info = self.parser._extract_time(text)
+        assert time_info["raw"] != ""
+
+    def test_normalize_chinese_time(self):
+        """测试中文时间标准化"""
+        # 下午3点 -> 15:00
+        result = self.parser.normalize_time("明天下午3点")
+        assert "15:00" in result
+
+        # 上午9点 -> 09:00
+        result = self.parser.normalize_time("明天上午9点")
+        assert "09:00" in result
+
+        # 晚上8点半 -> 20:30
+        result = self.parser.normalize_time("晚上8点半")
+        assert "20:30" in result
 
     def test_normalize_time_relative(self):
         """测试时间标准化 - 相对时间"""
