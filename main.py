@@ -9,13 +9,9 @@ from dotenv import load_dotenv
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-# 添加 NexAU 到路径
-nexau_path = project_root / "NexAU-main"
-if nexau_path.exists():
-    sys.path.insert(0, str(nexau_path))
-
 from nexau import Agent, AgentConfig, LLMConfig, Tool
 from nexau.archs.main_sub.execution.hooks import LoggingMiddleware
+from nexau.archs.tracer.adapters import LangfuseTracer
 
 # 加载环境变量
 load_dotenv()
@@ -30,6 +26,7 @@ from src.event_manager import (
     modify_event_binding,
     query_event_binding,
     delete_event_binding,
+    parse_document_binding,
 )
 
 # 配置工具
@@ -38,6 +35,7 @@ tools = [
     Tool.from_yaml(base_dir / "tools/modify_event.tool.yaml", binding=modify_event_binding),
     Tool.from_yaml(base_dir / "tools/query_event.tool.yaml", binding=query_event_binding),
     Tool.from_yaml(base_dir / "tools/delete_event.tool.yaml", binding=delete_event_binding),
+    Tool.from_yaml(base_dir / "tools/parse_document.tool.yaml", binding=parse_document_binding),
 ]
 
 # 配置 LLM
@@ -52,6 +50,20 @@ llm_config = LLMConfig(
 
 # 读取系统提示词
 system_prompt_path = base_dir / "system-prompt.md"
+
+# 配置 Langfuse Tracer
+langfuse_public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
+langfuse_secret_key = os.getenv("LANGFUSE_SECRET_KEY")
+langfuse_host = os.getenv("LANGFUSE_HOST", "https://cloud.langfuse.com")
+
+tracers = []
+if langfuse_public_key and langfuse_secret_key:
+    tracer = LangfuseTracer(
+        public_key=langfuse_public_key,
+        secret_key=langfuse_secret_key,
+        host=langfuse_host,
+    )
+    tracers.append(tracer)
 
 # 配置代理
 agent_config = AgentConfig(
@@ -69,6 +81,7 @@ agent_config = AgentConfig(
             log_model_calls=True,
         ),
     ],
+    tracers=tracers if tracers else None,
 )
 
 agent = Agent(config=agent_config)

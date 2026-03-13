@@ -2,7 +2,7 @@ agent:
   name: personal-schedule-assistant
   max_context_tokens: 100000
   system_prompt: system-prompt.md
-  system_prompt_type: text
+  system_prompt_type: jinja
   tool_call_mode: openai
 
 llm:
@@ -22,6 +22,8 @@ tools:
     binding: src.event_manager.query_event_binding
   - path: tools/delete_event.tool.yaml
     binding: src.event_manager.delete_event_binding
+  - path: tools/parse_document.tool.yaml
+    binding: src.event_manager.parse_document_binding
 
 skills:
   - path: skills/schedule-skill

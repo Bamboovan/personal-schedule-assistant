@@ -9,13 +9,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from src.event_manager import (
-    EventManager,
-    add_event_binding,
-    modify_event_binding,
-    query_event_binding,
-    delete_event_binding,
-)
+from src.event_manager import EventManager
 
 
 class TestEventManager:
@@ -36,7 +30,7 @@ class TestEventManager:
 
     def test_add_event(self):
         """测试添加日程"""
-        result = add_event_binding(
+        result = self.manager.add_event(
             title="团队周会",
             start_time="2026-03-10 15:00",
             end_time="2026-03-10 16:00",
@@ -50,10 +44,10 @@ class TestEventManager:
     def test_query_events(self):
         """测试查询日程"""
         # 先添加一些测试数据
-        add_event_binding("测试会议 1", "2026-03-15 10:00", "2026-03-15 11:00")
-        add_event_binding("测试会议 2", "2026-03-20 14:00", "2026-03-20 15:00")
+        self.manager.add_event("测试会议 1", "2026-03-15 10:00", "2026-03-15 11:00")
+        self.manager.add_event("测试会议 2", "2026-03-20 14:00", "2026-03-20 15:00")
 
-        result = query_event_binding(
+        result = self.manager.query_events(
             start_date="2026-03-01",
             end_date="2026-03-31"
         )
@@ -63,10 +57,10 @@ class TestEventManager:
 
     def test_query_events_with_keyword(self):
         """测试带关键词查询"""
-        add_event_binding("团队会议", "2026-03-15 10:00", "2026-03-15 11:00", description="重要讨论")
-        add_event_binding("个人日程", "2026-03-20 14:00", "2026-03-20 15:00")
+        self.manager.add_event("团队会议", "2026-03-15 10:00", "2026-03-15 11:00", description="重要讨论")
+        self.manager.add_event("个人日程", "2026-03-20 14:00", "2026-03-20 15:00")
 
-        result = query_event_binding(
+        result = self.manager.query_events(
             start_date="2026-03-01",
             end_date="2026-03-31",
             keyword="团队"
@@ -78,42 +72,42 @@ class TestEventManager:
     def test_modify_event(self):
         """测试修改日程"""
         # 先添加
-        add_result = add_event_binding("测试会议", "2026-03-15 10:00", "2026-03-15 11:00")
+        add_result = self.manager.add_event("测试会议", "2026-03-15 10:00", "2026-03-15 11:00")
         event_id = add_result["event_id"]
 
         # 再修改
-        modify_result = modify_event_binding(
+        modify_result = self.manager.modify_event(
             event_id=event_id,
             title="修改后的会议"
         )
         assert modify_result["status"] == "success"
 
         # 验证修改
-        query_result = query_event_binding("2026-03-01", "2026-03-31")
+        query_result = self.manager.query_events("2026-03-01", "2026-03-31")
         event = next(e for e in query_result["events"] if e["event_id"] == event_id)
         assert event["title"] == "修改后的会议"
 
     def test_delete_event(self):
         """测试删除日程"""
-        add_result = add_event_binding("临时会议", "2026-03-20 14:00", "2026-03-20 15:00")
+        add_result = self.manager.add_event("临时会议", "2026-03-20 14:00", "2026-03-20 15:00")
         event_id = add_result["event_id"]
 
-        delete_result = delete_event_binding(event_id=event_id)
+        delete_result = self.manager.delete_event(event_id=event_id)
         assert delete_result["status"] == "success"
 
         # 验证已删除
-        query_result = query_event_binding("2026-03-01", "2026-03-31")
+        query_result = self.manager.query_events("2026-03-01", "2026-03-31")
         assert query_result["count"] == 0
 
     def test_delete_nonexistent_event(self):
         """测试删除不存在的日程"""
-        result = delete_event_binding(event_id="nonexistent")
+        result = self.manager.delete_event(event_id="nonexistent")
         assert result["status"] == "error"
         assert "未找到" in result["message"]
 
     def test_modify_nonexistent_event(self):
         """测试修改不存在的日程"""
-        result = modify_event_binding(event_id="nonexistent", title="新标题")
+        result = self.manager.modify_event(event_id="nonexistent", title="新标题")
         assert result["status"] == "error"
         assert "未找到" in result["message"]
 

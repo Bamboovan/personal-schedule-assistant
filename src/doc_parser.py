@@ -1,13 +1,43 @@
+"""日程解析模块。
+
+从聊天记录和 Markdown 文档中提取日程信息。
+
+提供功能：
+- 解析 Markdown 文件中的日程
+- 解析聊天记录中的日程
+- 将各种时间格式标准化
+
+示例:
+    >>> from src.doc_parser import ScheduleParser
+    >>> parser = ScheduleParser()
+    >>> schedules = parser.parse_chat_log("明天下午3点开会")
+"""
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict
 from pathlib import Path
+from typing import TypedDict
+
+
+class TimeInfo(TypedDict):
+    """时间信息结构。"""
+    raw: str
+    groups: tuple[str, ...]
+
+
+class ScheduleInfo(TypedDict):
+    """日程信息结构。"""
+    title: str
+    time_info: TimeInfo
+    description: str
+    source: str
+    context: str
+
 
 class ScheduleParser:
-    """从聊天记录和 Markdown 文档中提取日程信息"""
+    """从聊天记录和 Markdown 文档中提取日程信息。"""
 
     # 时间模式匹配
-    TIME_PATTERNS = [
+    TIME_PATTERNS: list[str] = [
         # 完整日期范围：2026-03-10 15:00~16:00
         r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*(\d{1,2}:\d{2})?\s*[-~至到]\s*(\d{4}[-/]\d{1,2}[-/]\d{1,2})\s*(\d{1,2}:\d{2})?',
         # 完整日期 + 时间：2026-03-10 15:00
@@ -15,23 +45,45 @@ class ScheduleParser:
         # 月日范围：3 月 10 日 15:00~16:00
         r'(\d{1,2}月\d{1,2}日)\s*(\d{1,2}:\d{2})?\s*[-~至到]\s*(\d{1,2}月\d{1,2}日)\s*(\d{1,2}:\d{2})?',
         # 相对时间范围：明天 15:00~16:00
-        r'(今天 | 明天 | 后天 | 下周一 | 下周二 | 下周三 | 下周四 | 下周五 | 下周六 | 下周日)*(\d{1,2}:\d{2})?\s*[-~至到]\s*(\d{1,2}:\d{2})?',
+        r'(今天|明天|后天|下周一|下周二|下周三|下周四|下周五|下周六|下周日)*(\d{1,2}:\d{2})?\s*[-~至到]\s*(\d{1,2}:\d{2})?',
         # 相对时间 + 时间：明天 15:00
-        r'(今天 | 明天 | 后天 | 下周一 | 下周二 | 下周三 | 下周四 | 下周五 | 下周六 | 下周日)*(\d{1,2}:\d{2})',
+        r'(今天|明天|后天|下周一|下周二|下周三|下周四|下周五|下周六|下周日)*(\d{1,2}:\d{2})',
     ]
 
-    def parse_markdown_file(self, file_path: str) -> List[Dict]:
-        """解析 Markdown 文件，提取日程信息"""
+    def parse_markdown_file(self, file_path: str) -> list[ScheduleInfo]:
+        """解析 Markdown 文件，提取日程信息。
+
+        Args:
+            file_path: Markdown 文件路径
+
+        Returns:
+            提取的日程信息列表
+        """
         content = Path(file_path).read_text(encoding='utf-8')
         return self.extract_schedules(content, source=file_path)
 
-    def parse_chat_log(self, chat_text: str) -> List[Dict]:
-        """解析聊天记录，提取日程信息"""
+    def parse_chat_log(self, chat_text: str) -> list[ScheduleInfo]:
+        """解析聊天记录，提取日程信息。
+
+        Args:
+            chat_text: 聊天记录文本
+
+        Returns:
+            提取的日程信息列表
+        """
         return self.extract_schedules(chat_text, source="chat")
 
-    def extract_schedules(self, text: str, source: str = "") -> List[Dict]:
-        """从文本中提取日程信息"""
-        schedules = []
+    def extract_schedules(self, text: str, source: str = "") -> list[ScheduleInfo]:
+        """从文本中提取日程信息。
+
+        Args:
+            text: 要解析的文本
+            source: 来源标识
+
+        Returns:
+            提取的日程信息列表
+        """
+        schedules: list[ScheduleInfo] = []
 
         # 提取日程关键词
         schedule_keywords = ['会议', '日程', '安排', '约会', '活动', '面试', '汇报', '讨论', 'review']
@@ -47,12 +99,23 @@ class ScheduleParser:
 
         return schedules
 
-    def _parse_schedule_line(self, line: str, all_lines: List[str], current_idx: int) -> Dict:
-        """解析单行日程信息"""
-        schedule = {
+    def _parse_schedule_line(self, line: str, all_lines: list[str], current_idx: int) -> ScheduleInfo:
+        """解析单行日程信息。
+
+        Args:
+            line: 当前行内容
+            all_lines: 所有行内容
+            current_idx: 当前行索引
+
+        Returns:
+            日程信息字典
+        """
+        schedule: ScheduleInfo = {
             'title': self._extract_title(line),
             'time_info': self._extract_time(line),
             'description': line.strip(),
+            'source': '',
+            'context': '',
         }
 
         # 尝试从上下文获取更多信息
@@ -62,7 +125,14 @@ class ScheduleParser:
         return schedule
 
     def _extract_title(self, text: str) -> str:
-        """提取日程标题"""
+        """提取日程标题。
+
+        Args:
+            text: 包含日程的文本
+
+        Returns:
+            提取的标题
+        """
         # 移除时间信息，保留主题
         for pattern in self.TIME_PATTERNS:
             text = re.sub(pattern, '', text)
@@ -73,8 +143,15 @@ class ScheduleParser:
 
         return text.strip()[:50] if text.strip() else "未命名日程"
 
-    def _extract_time(self, text: str) -> Dict:
-        """提取时间信息"""
+    def _extract_time(self, text: str) -> TimeInfo:
+        """提取时间信息。
+
+        Args:
+            text: 包含时间的文本
+
+        Returns:
+            时间信息字典
+        """
         for pattern in self.TIME_PATTERNS:
             match = re.search(pattern, text)
             if match:
@@ -85,11 +162,18 @@ class ScheduleParser:
         return {'raw': '', 'groups': ()}
 
     def normalize_time(self, time_str: str) -> str:
-        """将各种时间格式标准化为 YYYY-MM-DD HH:MM"""
+        """将各种时间格式标准化为 YYYY-MM-DD HH:MM。
+
+        Args:
+            time_str: 时间字符串
+
+        Returns:
+            标准化的时间字符串
+        """
         # 处理相对时间
         today = datetime.now()
-        
-        relative_days = {
+
+        relative_days: dict[str, int] = {
             '今天': 0,
             '明天': 1,
             '后天': 2,
@@ -121,6 +205,7 @@ class ScheduleParser:
             return f"{year}-{month.zfill(2)}-{day.zfill(2)} {time}"
 
         return time_str
+
 
 # 使用示例
 parser = ScheduleParser()

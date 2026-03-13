@@ -1,0 +1,7 @@
+# 核心依赖
+nexau @ git+https://github.com/nex-agi/NexAU.git@v0.3.9
+python-dotenv>=1.0.0
+
+# 开发依赖
+pytest>=7.0.0
+pytest-cov>=4.0.0
