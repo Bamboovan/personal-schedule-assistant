@@ -41,6 +41,28 @@ class TestEventManager:
         assert "event_id" in result
         assert "已创建日程" in result["message"]
 
+    def test_add_event_with_conflict(self):
+        """测试添加冲突日程"""
+        # 先添加一个日程
+        self.manager.add_event("团队会议", "2026-03-15 10:00", "2026-03-15 11:00")
+
+        # 尝试添加时间重叠的日程
+        result = self.manager.add_event("面试", "2026-03-15 10:30", "2026-03-15 11:30")
+
+        assert result["status"] == "conflict"
+        assert "团队会议" in result["message"]
+        assert len(result["conflicts"]) == 1
+
+    def test_add_event_no_conflict(self):
+        """测试添加不冲突的日程"""
+        # 添加一个日程
+        self.manager.add_event("会议 A", "2026-03-15 10:00", "2026-03-15 11:00")
+
+        # 添加紧接其后的日程（不冲突）
+        result = self.manager.add_event("会议 B", "2026-03-15 11:00", "2026-03-15 12:00")
+
+        assert result["status"] == "success"
+
     def test_query_events(self):
         """测试查询日程"""
         # 先添加一些测试数据
@@ -110,6 +132,54 @@ class TestEventManager:
         result = self.manager.modify_event(event_id="nonexistent", title="新标题")
         assert result["status"] == "error"
         assert "未找到" in result["message"]
+
+    def test_modify_event_with_conflict(self):
+        """测试修改日程产生冲突"""
+        # 添加两个日程
+        result1 = self.manager.add_event("会议 A", "2026-03-15 10:00", "2026-03-15 11:00")
+        self.manager.add_event("会议 B", "2026-03-15 14:00", "2026-03-15 15:00")
+
+        # 尝试将会议 A 改到与会议 B 冲突的时间
+        result = self.manager.modify_event(
+            event_id=result1["event_id"],
+            start_time="2026-03-15 14:30",
+            end_time="2026-03-15 15:30"
+        )
+
+        assert result["status"] == "conflict"
+        assert "会议 B" in result["message"]
+
+    def test_modify_event_exclude_self(self):
+        """测试修改日程时排除自身（不产生假冲突）"""
+        # 添加一个日程
+        result1 = self.manager.add_event("会议 A", "2026-03-15 10:00", "2026-03-15 11:00")
+
+        # 修改自己的时间（应该成功，不与自己冲突）
+        result = self.manager.modify_event(
+            event_id=result1["event_id"],
+            start_time="2026-03-15 09:00",
+            end_time="2026-03-15 10:00"
+        )
+
+        assert result["status"] == "success"
+
+    def test_check_conflict_method(self):
+        """测试冲突检测方法"""
+        # 添加一个日程
+        self.manager.add_event("会议 A", "2026-03-15 10:00", "2026-03-15 11:00")
+
+        # 检测重叠时间段
+        conflicts = self.manager.check_conflict("2026-03-15 10:30", "2026-03-15 11:30")
+        assert len(conflicts) == 1
+        assert conflicts[0]["title"] == "会议 A"
+
+        # 检测不重叠时间段
+        conflicts = self.manager.check_conflict("2026-03-15 11:00", "2026-03-15 12:00")
+        assert len(conflicts) == 0
+
+        # 检测完全包含时间段
+        conflicts = self.manager.check_conflict("2026-03-15 09:30", "2026-03-15 11:30")
+        assert len(conflicts) == 1
 
 
 class TestScheduleParser:

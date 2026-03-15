@@ -13,6 +13,12 @@ input_schema:
     keyword:
       type: string
       description: 搜索关键词（可选）
+    view_type:
+      type: string
+      description: 视图类型，'list' 列表视图或 'week' 周视图（可选，默认 list）
+      enum:
+        - list
+        - week
   required:
     - start_date
     - end_date

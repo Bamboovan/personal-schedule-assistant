@@ -273,7 +273,3 @@ class ScheduleParser:
             return f"{year}-{month.zfill(2)}-{day.zfill(2)} {time}"
 
         return time_str
-
-
-# 使用示例
-parser = ScheduleParser()

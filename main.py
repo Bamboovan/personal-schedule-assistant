@@ -11,6 +11,7 @@ sys.path.insert(0, str(project_root))
 
 from nexau import Agent, AgentConfig, LLMConfig, Tool
 from nexau.archs.main_sub.execution.hooks import LoggingMiddleware
+from nexau.archs.main_sub.context_value import ContextValue
 from nexau.archs.tracer.adapters import LangfuseTracer
 
 # 加载环境变量
@@ -40,8 +41,8 @@ tools = [
 
 # 配置 LLM
 llm_config = LLMConfig(
-    temperature=0.7,
-    max_tokens=4096,
+    temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+    max_tokens=int(os.getenv("LLM_MAX_TOKENS", "4096")),
     model=os.getenv("LLM_MODEL"),
     base_url=os.getenv("LLM_BASE_URL"),
     api_key=os.getenv("LLM_API_KEY"),
@@ -101,7 +102,6 @@ if __name__ == "__main__":
                 break
 
             # 注入当前日期到提示词
-            from nexau.archs.main_sub.context_value import ContextValue
             current_date = datetime.now().strftime("%Y 年%m 月%d 日 %A")
             variables = ContextValue(template={"current_date": current_date})
             

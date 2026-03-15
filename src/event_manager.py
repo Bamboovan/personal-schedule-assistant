@@ -14,6 +14,7 @@
 """
 import fcntl
 import json
+import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, TypedDict, Unpack
@@ -106,7 +107,7 @@ class EventManager:
         description: str = "",
         location: str = "",
         reminder: int = 15
-    ) -> dict[str, str]:
+    ) -> dict[str, str | int | list[EventDict]]:
         # 验证时间格式
         if not _validate_time_format(start_time):
             return {"status": "error", "message": f"开始时间格式无效: {start_time}"}
@@ -117,7 +118,16 @@ class EventManager:
         if not _validate_time_range(start_time, end_time):
             return {"status": "error", "message": "结束时间必须晚于开始时间"}
 
-        import uuid
+        # 检测时间冲突
+        conflicts = self.check_conflict(start_time, end_time)
+        if conflicts:
+            conflict_list = [f"{e['title']} ({e['start_time']} - {e['end_time']})" for e in conflicts]
+            return {
+                "status": "conflict",
+                "message": f"时间冲突，已有日程：{', '.join(conflict_list)}",
+                "conflicts": conflicts
+            }
+
         event_id = str(uuid.uuid4())[:8]
         event: EventDict = {
             "event_id": event_id,
@@ -133,20 +143,40 @@ class EventManager:
         self._save_events()
         return {"status": "success", "event_id": event_id, "message": f"已创建日程：{title}"}
 
-    def modify_event(self, event_id: str, **kwargs: str | int) -> dict[str, str]:
+    def modify_event(self, event_id: str, **kwargs: str | int) -> dict[str, str | list[EventDict]]:
         if event_id not in self.events:
             return {"status": "error", "message": f"未找到日程 ID: {event_id}"}
 
         event = self.events[event_id]
+
+        # 如果修改了时间，先验证并检测冲突
+        if 'start_time' in kwargs or 'end_time' in kwargs:
+            new_start = kwargs.get('start_time', event['start_time'])
+            new_end = kwargs.get('end_time', event['end_time'])
+
+            # 验证时间格式
+            if 'start_time' in kwargs and not _validate_time_format(new_start):
+                return {"status": "error", "message": f"开始时间格式无效: {new_start}"}
+            if 'end_time' in kwargs and not _validate_time_format(new_end):
+                return {"status": "error", "message": f"结束时间格式无效: {new_end}"}
+
+            # 验证时间范围
+            if not _validate_time_range(new_start, new_end):
+                return {"status": "error", "message": "结束时间必须晚于开始时间"}
+
+            # 检测冲突（排除自身）
+            conflicts = self.check_conflict(new_start, new_end, exclude_event_id=event_id)
+            if conflicts:
+                conflict_list = [f"{e['title']} ({e['start_time']} - {e['end_time']})" for e in conflicts]
+                return {
+                    "status": "conflict",
+                    "message": f"时间冲突，已有日程：{', '.join(conflict_list)}",
+                    "conflicts": conflicts
+                }
+
         for key, value in kwargs.items():
             if value and key in event:
                 event[key] = value  # type: ignore[typeddict-item]
-
-        # 如果修改了时间，验证时间范围
-        start_time = event.get("start_time", "")
-        end_time = event.get("end_time", "")
-        if start_time and end_time and not _validate_time_range(start_time, end_time):
-            return {"status": "error", "message": "结束时间必须晚于开始时间"}
 
         self._save_events()
         return {"status": "success", "message": f"已更新日程：{event['title']}"}
@@ -212,7 +242,22 @@ class EventManager:
 
 
 # 绑定函数（供 Tool.from_yaml 使用）
-event_manager = EventManager()
+def get_event_manager(data_file: str = "data/events.json") -> EventManager:
+    """获取 EventManager 单例实例。"""
+    if not hasattr(get_event_manager, '_instance'):
+        get_event_manager._instance = EventManager(data_file)
+    return get_event_manager._instance
+
+
+def set_event_manager_for_test(manager: EventManager) -> None:
+    """测试用：设置临时实例。"""
+    get_event_manager._instance = manager
+
+
+def reset_event_manager() -> None:
+    """重置单例实例（用于测试清理）。"""
+    if hasattr(get_event_manager, '_instance'):
+        delattr(get_event_manager, '_instance')
 
 
 def add_event_binding(
@@ -222,20 +267,24 @@ def add_event_binding(
     description: str = "",
     location: str = "",
     reminder: int = 15
-) -> dict[str, str]:
-    return event_manager.add_event(title, start_time, end_time, description, location, reminder)
+) -> dict[str, str | int | list[EventDict]]:
+    return get_event_manager().add_event(title, start_time, end_time, description, location, reminder)
 
 
-def modify_event_binding(event_id: str, **kwargs: str | int) -> dict[str, str]:
-    return event_manager.modify_event(event_id, **kwargs)
+def modify_event_binding(event_id: str, **kwargs: str | int) -> dict[str, str | list[EventDict]]:
+    return get_event_manager().modify_event(event_id, **kwargs)
 
 
-def query_event_binding(start_date: str, end_date: str, keyword: str = "") -> dict[str, str | int | list[EventDict]]:
-    return event_manager.query_events(start_date, end_date, keyword)
+def query_event_binding(start_date: str, end_date: str, keyword: str = "", view_type: str = "list") -> dict[str, str | int | list[EventDict] | str]:
+    result = get_event_manager().query_events(start_date, end_date, keyword)
+    if view_type == "week" and result["status"] == "success" and result.get("events"):
+        from src.visualize import render_week_view
+        result["week_view"] = render_week_view(result["events"])
+    return result
 
 
 def delete_event_binding(event_id: str) -> dict[str, str]:
-    return event_manager.delete_event(event_id)
+    return get_event_manager().delete_event(event_id)
 
 
 def parse_document_binding(content: str, source_type: str) -> dict[str, str]:
